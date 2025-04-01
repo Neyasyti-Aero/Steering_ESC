@@ -2,23 +2,25 @@
 #include "libraries/PID/PID_v1_impl.h"
 
 #include "libraries/ServoInput/ServoInput_impl.h"
+#include <Servo.h>
 
 // degrees of neutral position
-#define ENCODER_CALIBRATION_VALUE 44.82f
+#define ENCODER_CALIBRATION_VALUE 40.78125f
 // experimental values
 //#define CALIBRATED_ENCODER_MAX_RIGHT 29.3f
 //#define CALIBRATED_ENCODER_MAX_LEFT -39.2f
 // testing values
-#define CALIBRATED_ENCODER_MAX_RIGHT 28.0f
-#define CALIBRATED_ENCODER_MAX_LEFT -28.0f
+#define CALIBRATED_ENCODER_MAX_RIGHT 32.0f
+#define CALIBRATED_ENCODER_MAX_LEFT -32.0f
+#define MINIMUM_SIGNIFICANT_DELTA 1.1f
 #define CALIBRATED_ENCODER_AMPLITUDE (CALIBRATED_ENCODER_MAX_RIGHT - CALIBRATED_ENCODER_MAX_LEFT)
 
 // ######################################## Constants ########################################
 
 // PID Tuning
-double consKp = 0.03, consKi = 0.001, consKd = 0.0010;
-const double OUTPUT_LIMIT = 0.95;
-const double OUTPUT_LIMIT_LOW = 0.05;
+double consKp = 2.9, consKi = 0.4, consKd = 0.6;
+const double OUTPUT_LIMIT = 0.998;
+const double OUTPUT_LIMIT_LOW = 0.01;
 
 int loopPeriod = 12;
 
@@ -31,7 +33,10 @@ const int SteeringSignalPin = 3;   // MUST be interrupt-capable!
 const int SteeringPulseMin = 1000;  // microseconds (us)
 const int SteeringPulseMax = 2000;  // Ideal values for your servo can be found with the "Calibration" example
 
+#define ESC_SIGNAL_PIN 9
+
 ServoInputPin<SteeringSignalPin> steering(SteeringPulseMin, SteeringPulseMax);
+Servo motorESC;
 
 const int PIN_ENC_CLK = 8; // Green Pin
 const int PIN_ENC_DATA = 7; // White Pin
@@ -117,6 +122,7 @@ void setup()
   delay(1);
 
   steering.attach();  // attaches the steering servo input interrupt
+  motorESC.attach(ESC_SIGNAL_PIN);
 
   delay(1000);
 }
@@ -178,7 +184,14 @@ void loop()
       }
       setpoint_avg /= setpoint_buffer.size();
 
-      pid_Setpoint = setpoint_avg;
+      if (abs(rcSetpoint - encAngle360) < MINIMUM_SIGNIFICANT_DELTA)
+      {
+        pid_Setpoint = pid_Input;
+      }
+      else
+      {
+        pid_Setpoint = setpoint_avg;
+      }
   }
   else
   {
@@ -200,7 +213,15 @@ void loop()
   }
   out_avg /= out_buffer.size();
 
-  //motor_setPWM(out_avg, SlowDecay);
+  uint32_t out_us = 1500 + round(out_avg * 500);
+  if (abs(out_us - 1500) > 100)
+  {
+    motorESC.writeMicroseconds(out_us);
+  }
+  else
+  {
+    motorESC.writeMicroseconds(1500);
+  }
 
   Serial.print(" pid_Setpoint: ");
   Serial.print(pid_Setpoint);
