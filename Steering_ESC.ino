@@ -43,6 +43,8 @@ const int PIN_ENC_DATA = 7; // White Pin
 const int PIN_ENC_nCS = 6; // Yellow Pin
 const int ENC_BIT_COUNT = 10;  // 10 Bit Mode
 
+const int RELAY = 12;  // EPS relay
+
 // ######################################## Encoder ########################################
 
 void encoder_setup()
@@ -124,8 +126,14 @@ void setup()
   steering.attach();  // attaches the steering servo input interrupt
   motorESC.attach(ESC_SIGNAL_PIN);
 
+  // relay setup
+  pinMode(RELAY, OUTPUT);
+  digitalWrite(RELAY, LOW); // ESC power off / EPS power on
+
   delay(1000);
 }
+
+unsigned long invalidServoPulses = 0;
 
 void loop()
 {
@@ -163,6 +171,37 @@ void loop()
 
   Serial.print(" rcInputActive ");
   Serial.print(rcInputActive);
+
+  unsigned long servoPulse = steering.getPulseRaw();
+  Serial.print(" servoPulse: ");
+  Serial.print(servoPulse);
+
+  unsigned long lastFallingEdge = steering.getLastFallingEdge();
+  Serial.print(" last FE: ");
+  Serial.print(lastFallingEdge);
+
+  if (servoPulse > 2100 || servoPulse < 900 || millis() - lastFallingEdge > 100)
+  {
+    invalidServoPulses++;
+  }
+  else if (invalidServoPulses > 0)
+  {
+    invalidServoPulses--;
+  }
+
+  if (invalidServoPulses > 200)
+  {
+    invalidServoPulses = 100;
+  }
+
+  if (rcInputActive && millis() > 1500 && millis() - lastFallingEdge < 1300 && invalidServoPulses < 20)
+  {
+    digitalWrite(RELAY, HIGH); // ESC power on / EPS power off
+  }
+  else if (millis() - lastFallingEdge > 3500)
+  {
+    digitalWrite(RELAY, LOW); // ESC power off / EPS power on
+  }
 
   const float setpointRange = CALIBRATED_ENCODER_AMPLITUDE;
 
