@@ -198,7 +198,7 @@ void loop()
   {
     digitalWrite(RELAY, HIGH); // ESC power on / EPS power off
   }
-  else if (millis() - lastFallingEdge > 3500)
+  else if (millis() - lastFallingEdge > 3500 || (servoPulse < 900 && invalidServoPulses < 5))
   {
     digitalWrite(RELAY, LOW); // ESC power off / EPS power on
   }
